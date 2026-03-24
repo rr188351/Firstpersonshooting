@@ -20,8 +20,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="Effects")
 	UParticleSystem* DefaultDestroyEffect;
-	UPROPERTY(EditAnywhere, Category="Spawning")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Spawner")
 	TSubclassOf<AMyClass> BoxClass;
+
 	void OnBoxDataResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
 

@@ -37,78 +37,85 @@ void AShooterCharacter::BeginPlay()
 
 void AShooterCharacter::DoStartFiring()
 {
-	if (CurrentWeapon && !IsDead())
-	{
-		CurrentWeapon->StartFiring();
+    if (CurrentWeapon && !IsDead())
+    {
+        CurrentWeapon->StartFiring();
 
-		FVector Start = GetFirstPersonCameraComponent()->GetComponentLocation();
-		FVector End   = Start + (GetFirstPersonCameraComponent()->GetForwardVector() * MaxAimDistance);
+        FVector Start = GetFirstPersonCameraComponent()->GetComponentLocation();
+        FVector End   = Start + (GetFirstPersonCameraComponent()->GetForwardVector() * MaxAimDistance);
 
-		FHitResult Hit;
-		FCollisionQueryParams Params;
-		Params.AddIgnoredActor(this);
+        FHitResult Hit;
+        FCollisionQueryParams TraceParams;
+        TraceParams.AddIgnoredActor(this);
 
-		AMyClass* HitBox = nullptr;
-		FVector TargetLocation = End;
+        AMyClass* HitBox = nullptr;
+        FVector TargetLocation = End;
 
-		// 🔹 Step 1: Normal trace from camera
-		if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params))
-		{
-			if (AMyClass* Box = Cast<AMyClass>(Hit.GetActor()))
-			{
-				// ✅ Direct aim → damage
-				UGameplayStatics::ApplyDamage(Box, 1.0f, GetController(), this, UDamageType::StaticClass());
-				HitBox = Box;
-				TargetLocation = Hit.ImpactPoint;
+        // 🔹 Step 1: Line trace from camera
+        if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, TraceParams))
+        {
+            if (AMyClass* Box = Cast<AMyClass>(Hit.GetActor()))
+            {
+                // ✅ Direct aim → damage
+                UGameplayStatics::ApplyDamage(Box, 1.0f, GetController(), this, UDamageType::StaticClass());
+                HitBox = Box;
+                TargetLocation = Hit.ImpactPoint;
+            }
+            else if (ACharacter* HitChar = Cast<ACharacter>(Hit.GetActor()))
+            {
+                // ✅ Player damage
+                UGameplayStatics::ApplyDamage(HitChar, 25.0f, GetController(), this, UDamageType::StaticClass());
+                TargetLocation = Hit.ImpactPoint;
+            }
+        }
 
-			}
-		}
+        // 🔹 Step 2: If no box hit, aim nearest box (no damage)
+        if (!HitBox)
+        {
+            AMyClass* NearestBox = nullptr;
+            float MinDist = FLT_MAX;
 
-		// 🔹 Step 2: Only if NO box was hit, show nearest box line (NO DAMAGE)
-		if (!HitBox)
-		{
-			AMyClass* NearestBox = nullptr;
-			float MinDist = FLT_MAX;
+            for (TActorIterator<AMyClass> It(GetWorld()); It; ++It)
+            {
+                AMyClass* Box = *It;
+                if (IsValid(Box) && !Box->IsPendingKillPending())
+                {
+                    float Dist = FVector::Dist(Box->GetActorLocation(), GetActorLocation());
+                    if (Dist < MinDist)
+                    {
+                        MinDist = Dist;
+                        NearestBox = Box;
+                    }
+                }
+            }
 
-			for (TActorIterator<AMyClass> It(GetWorld()); It; ++It)
-			{
-				AMyClass* Box = *It;
-				if (IsValid(Box) && !Box->IsPendingKillPending())
-				{
-					float Dist = FVector::Dist(Box->GetActorLocation(), GetActorLocation());
-					if (Dist < MinDist)
-					{
-						MinDist = Dist;
-						NearestBox = Box;
-					}
-				}
-			}
+            if (NearestBox)
+            {
+                TargetLocation = NearestBox->GetActorLocation();
+            }
+        }
 
-			if (NearestBox)
-			{
-				TargetLocation = NearestBox->GetActorLocation();
-			}
-		}
+        // 🔹 Step 3: Spawn projectile towards target location
+        FVector ShootDirection = (TargetLocation - Start).GetSafeNormal();
 
-		// 🔹 Step 3: Spawn projectile towards target location
-		FVector ShootDirection = (TargetLocation - Start).GetSafeNormal();
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.Instigator = GetInstigator();
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		SpawnParams.Instigator = GetInstigator();
+        AShooterProjectile* Projectile = GetWorld()->SpawnActor<AShooterProjectile>(
+            ProjectileClass,
+            Start,
+            ShootDirection.Rotation(),
+            SpawnParams
+        );
 
-		AShooterProjectile* Projectile = GetWorld()->SpawnActor<AShooterProjectile>(
-			ProjectileClass,
-			Start,
-			ShootDirection.Rotation(),
-			SpawnParams
-		);
-
-		if (Projectile)
-		{
-			Projectile->FireInDirection(ShootDirection);
-		}
-	}
+        if (Projectile)
+        {
+            
+            Projectile->FireInDirection(ShootDirection);
+        }
+    }
 }
 void AShooterCharacter::DoStopFiring()
 {
